@@ -30,4 +30,7 @@ defmodule Graft.State do
             machine: nil,
             # for each request, the address of the client who requested it
             requests: %{}
+            # ######### member change #########
+            # server_join:[],
+            # server_leave:[]
 end
