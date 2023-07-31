@@ -55,7 +55,7 @@ defmodule Graft.MemberChangeRPC do
             # cluster with all servers, including joining and leaving servers
   defstruct server_join: [],
             # cluster with remained servers and joining servers and without leaving servers
-            server_leave: [],
+            server_leave: []
 
 end
 
