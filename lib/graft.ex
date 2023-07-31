@@ -102,4 +102,10 @@ defmodule Graft do
   """
   @spec request(atom(), any()) :: response :: any()
   def request(server, entry), do: Graft.Client.request(server, entry)
+
+  ################ Membership change ##########################
+
+  # ServerJoin = [:server1,...], ServerLeave = [:server1,...]
+  def change_member(server, serverJoin \\ [], serverLeave \\ []), do: Graft.Member.change(server, serverJoin \\ [], serverLeave \\ [])
+
 end
