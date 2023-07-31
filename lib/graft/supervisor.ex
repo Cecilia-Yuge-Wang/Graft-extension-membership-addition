@@ -18,6 +18,16 @@ defmodule Graft.Supervisor do
     supervise(children, strategy: :one_for_one)
   end
 
+  def add_server(server) do
+    [servers, machine_module, machine_args] = [
+      Application.fetch_env!(:graft, :cluster),
+      Application.fetch_env!(:graft, :machine),
+      Application.fetch_env!(:graft, :machine_args)
+    ]
+    child_spec = worker(Graft.Server, [server, servers, machine_module, machine_args], restart: :transient, id: server)
+    Supervisor.start_child(__MODULE__, child_spec)
+  end
+
 
   defp cluster_config() do
     [
