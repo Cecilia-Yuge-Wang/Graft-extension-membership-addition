@@ -106,6 +106,12 @@ defmodule Graft do
   ################ Membership change ##########################
 
   # ServerJoin = [:server1,...], ServerLeave = [:server1,...]
-  def change_member(server, serverJoin \\ [], serverLeave \\ []), do: Graft.Member.change(server, serverJoin \\ [], serverLeave \\ [])
+  def change_member(server, serverJoin \\ [], serverLeave \\ []) do
+    request(server, {:change, serverJoin, []})
+    request(server, {:change, [], serverLeave})
+  end
+  def c(x) do
+    change_member(x, [:server0], [:server2])
+  end
 
 end

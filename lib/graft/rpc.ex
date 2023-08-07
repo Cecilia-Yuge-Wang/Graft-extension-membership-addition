@@ -11,7 +11,9 @@ defmodule Graft.AppendEntriesRPC do
             # log entries to store (empty for heartbeat; may send more than one for efficiency)
             entries: [],
             # leader’s commit_index
-            leader_commit: -1
+            leader_commit: -1,
+            ########## cluster change
+            newest_entry_info: []
 end
 
 defmodule Graft.AppendEntriesRPCReply do
@@ -52,11 +54,14 @@ end
 
 defmodule Graft.MemberChangeRPC do
   @moduledoc false
-            # cluster with all servers, including joining and leaving servers
-  defstruct server_join: [],
-            # cluster with remained servers and joining servers and without leaving servers
-            server_leave: []
-
+            #0 for C_old_new, 1 for C_new
+  defstruct cluster: 0,
+            # old_server_count: 0,
+            # old_cluster: [],
+            # old_new_server_count: 0,
+            # old_new_cluster: [],
+            new_server_count: 0,
+            new_cluster: []
 end
 
 # defmodule Graft.AppendMemberChangeEntriesRPC do
