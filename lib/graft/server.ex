@@ -730,6 +730,26 @@ end
     add_address(new_server_name)}
   end
 
+  def add_server(server, servers) do
+    [machine_module, machine_args] = [
+      Application.fetch_env!(:graft, :machine),
+      Application.fetch_env!(:graft, :machine_args)
+    ]
+    start_link(server, servers, machine_module, machine_args)
+    init([server, servers, machine_module, machine_args])
+  end
+
+  def add_address(servers) do
+    node_address=elem(hd(Application.fetch_env!(:graft, :cluster)),1)
+    Enum.map(servers, fn server -> {server, node_address} end)
+  end
+
+  def handle_info({:join_cluster, new_server}, state) do
+    {_, _, machine_module, machine_args} = state
+    add_server(new_server, add_address(state.servers ++ [new_server]))
+    {:noreply, state}
+  end
+
   # def member_change_RPC(old_cluster, old_server_count, serverJoin \\ [], serverLeave \\ []) do
   #   old_servers = old_cluster |> Enum.map(&elem(&1, 0))
   #   old_new_servers = old_servers ++ serverJoin
@@ -756,20 +776,6 @@ end
   #   new_server_count,
   #   new_cluster}
   # end
-
-  def add_server(server, servers) do
-    [machine_module, machine_args] = [
-      Application.fetch_env!(:graft, :machine),
-      Application.fetch_env!(:graft, :machine_args)
-    ]
-    start_link(server, servers, machine_module, machine_args)
-    init([server, servers, machine_module, machine_args])
-  end
-
-  def add_address(servers) do
-    node_address=elem(hd(Application.fetch_env!(:graft, :cluster)),1)
-    Enum.map(servers, fn server -> {server, node_address} end)
-  end
 
   # def changed_server_info() do
 
