@@ -18,37 +18,6 @@ defmodule Graft.Supervisor do
     supervise(children, strategy: :one_for_one)
   end
 
-  # def add_server(server) do
-  #   [servers, machine_module, machine_args] = [
-  #     Application.fetch_env!(:graft, :cluster),
-  #     Application.fetch_env!(:graft, :machine),
-  #     Application.fetch_env!(:graft, :machine_args)
-  #   ]
-  #   child_spec = worker(Graft.Server, [server, servers, machine_module, machine_args], restart: :transient, id: server)
-  #   Supervisor.start_child(__MODULE__, child_spec)
-  # end
-
-  # def add_server(server) do
-  #   [servers, machine_module, machine_args] = [
-  #     Application.fetch_env!(:graft, :cluster),
-  #     Application.fetch_env!(:graft, :machine_args)
-  #   ]
-
-  #   if Enum.member?(servers, {server, node()}) do
-  #     Logger.info("Server #{inspect(server)} already in cluster.")
-  #     {:ok, servers}
-  #   else
-  #     Logger.info("Add server #{inspect(server)} into cluster.")
-  #     new_servers = [{server, node()} | servers]
-
-  #     supervisor_spec = Supervisor.child_spec(Graft.Server, [server, servers, machine_module, machine_args], restart: :transient, id: server)
-  #     Supervisor.start_child(__MODULE__, supervisor_spec)
-
-  #     {:ok, new_servers}
-  #   end
-  # end
-
-
   defp cluster_config() do
     [
       Application.fetch_env!(:graft, :cluster) |> on_my_node(),
