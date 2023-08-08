@@ -153,8 +153,6 @@ def follower(
         case newest_entry_info do
           {:change, %Graft.MemberChangeRPC{
             cluster: cluster,
-            # old_new_server_count: old_new_server_count,
-            # old_new_cluster: old_new_cluster,
             new_server_count: new_server_count,
             new_cluster: new_cluster
           }} ->
@@ -392,26 +390,31 @@ end
   def leader(
         {:call, from},
         {:entry, entry},
-        data = %Graft.State{log: log = [{prev_index, _, _} | _]}
+        data = %Graft.State{log: log = [{prev_index, _, log_content} | _]}
       ) do
 
     case entry do
-      {:change, serverJoin, serverLeave} ->
-        Logger.debug(
-        "#{inspect(data.me)} received a member change request C_old_new! Index of entry: #{prev_index + 1}."
-        )
-
-        case {serverJoin, serverLeave} do
-            {[], []} -> IO.puts("No membership change requested.")
+      {:change, changeInfo} ->
+        case changeInfo do
+            # {[], []} -> IO.puts("No membership change requested.")
+            #     servers = data.servers
+            #     requests = Map.put(data.requests, prev_index + 1, from)
+            #     events =
+            #       for server <- servers, server !== data.me, data.ready[server] === true do
+            #         {:next_event, :cast, {:send_append_entries, server}}
+            #       end
+            #     log = [{prev_index + 1, data.current_term, entry} | log]
+            #     {:keep_state, %Graft.State{data | log: log, requests: requests}, events}
 
             {serverJoin, []} ->
+              Logger.debug(
+                "#{inspect(data.me)} received a member change request C_old_new! Index of entry: #{prev_index + 1}."
+                )
               {new_server_count, new_cluster} = seperated_member_change_RPC(data.servers, data.server_count, serverJoin, [])
               servers = new_cluster
               IO.puts("C_old_new member change request recieved.")
               entry = {:change, %Graft.MemberChangeRPC{
                                 cluster: 0,
-                                # old_new_server_count: old_new_server_count,
-                                # old_new_cluster: old_new_cluster,
                                 new_server_count: new_server_count,
                                 new_cluster: new_cluster}}
               requests = Map.put(data.requests, prev_index + 1, from)
@@ -423,13 +426,14 @@ end
               {:keep_state, %Graft.State{data | log: log, requests: requests}, events}
 
             {[], serverLeave} ->
+              Logger.debug(
+                "#{inspect(data.me)} received a member change request C_new! Index of entry: #{prev_index + 1}."
+                )
               {new_server_count, new_cluster} = seperated_member_change_RPC(data.servers, data.server_count, [], serverLeave)
               servers = new_cluster
               IO.puts("C_new member change request recieved.")
               entry = {:change, %Graft.MemberChangeRPC{
                                 cluster: 1,
-                                # old_new_server_count: old_new_server_count,
-                                # old_new_cluster: old_new_cluster,
                                 new_server_count: new_server_count,
                                 new_cluster: new_cluster}}
               requests = Map.put(data.requests, prev_index + 1, from)
@@ -440,7 +444,44 @@ end
               log = [{prev_index + 1, data.current_term, entry} | log]
               {:keep_state, %Graft.State{data | log: log, requests: requests}, events}
 
-            _ -> IO.puts("This is a combined member change request, it should have been seperated into two.")
+            :C_old_new ->
+              Logger.debug(
+                "#{inspect(data.me)} received a member change request C_old_new! Index of entry: #{prev_index + 1}."
+                )
+              IO.puts("C_old_new member change request recieved.(no change)")
+              entry = {:change, %Graft.MemberChangeRPC{
+                                cluster: 0,
+                                new_server_count: data.server_count,
+                                new_cluster: data.servers}}
+              requests = Map.put(data.requests, prev_index + 1, from)
+              events =
+                for server <- data.servers, server !== data.me, data.ready[server] === true do
+                  {:next_event, :cast, {:send_append_entries, server}}
+                end
+              log = [{prev_index + 1, data.current_term, entry} | log]
+              {:keep_state, %Graft.State{data | log: log, requests: requests}, events}
+
+            :C_new ->
+              Logger.debug(
+                "#{inspect(data.me)} received a member change request C_old_new! Index of entry: #{prev_index + 1}."
+                )
+              IO.puts("C_new member change request recieved.(no change)")
+              entry = {:change, %Graft.MemberChangeRPC{
+                                cluster: 1,
+                                new_server_count: data.server_count,
+                                new_cluster: data.servers}}
+              requests = Map.put(data.requests, prev_index + 1, from)
+              events =
+                for server <- data.servers, server !== data.me, data.ready[server] === true do
+                  {:next_event, :cast, {:send_append_entries, server}}
+                end
+              log = [{prev_index + 1, data.current_term, entry} | log]
+              {:keep_state, %Graft.State{data | log: log, requests: requests}, events}
+
+            _ -> IO.puts("This is an invalid member change request,can be seen as a normal request.")
+              Logger.debug(
+                "#{inspect(data.me)} received a request from a client! Index of entry: #{prev_index + 1}."
+              )
                 servers = data.servers
                 requests = Map.put(data.requests, prev_index + 1, from)
                 events =
@@ -450,7 +491,6 @@ end
                 log = [{prev_index + 1, data.current_term, entry} | log]
                 {:keep_state, %Graft.State{data | log: log, requests: requests}, events}
           end
-
       _ ->
         Logger.debug(
           "#{inspect(data.me)} received a request from a client! Index of entry: #{prev_index + 1}."
@@ -608,6 +648,13 @@ end
     do: {:keep_state_and_data, [{:reply, from, {:error, :invalid_event}}]}
 
   ############################################################################
+  #### NON-VOTING BEHAVIOUR ####
+  ############################################################################
+
+
+
+
+  ############################################################################
   #### GENERAL BEHAVIOUR ####
   ############################################################################
 
@@ -737,6 +784,7 @@ end
     ]
     start_link(server, servers, machine_module, machine_args)
     init([server, servers, machine_module, machine_args])
+    # GenStateMachine.cast(server, :start)
   end
 
   def add_address(servers) do
@@ -744,40 +792,14 @@ end
     Enum.map(servers, fn server -> {server, node_address} end)
   end
 
-  def handle_info({:join_cluster, new_server}, state) do
-    {_, _, machine_module, machine_args} = state
-    add_server(new_server, add_address(state.servers ++ [new_server]))
-    {:noreply, state}
-  end
-
-  # def member_change_RPC(old_cluster, old_server_count, serverJoin \\ [], serverLeave \\ []) do
-  #   old_servers = old_cluster |> Enum.map(&elem(&1, 0))
-  #   old_new_servers = old_servers ++ serverJoin
-  #   new_servers =
-  #     Enum.filter(old_new_servers, fn serverInfo ->
-  #       serverInfo not in serverLeave
-  #     end)
-
-  #   old_new_cluster = add_address(old_new_servers)
-  #   new_cluster = add_address(new_servers)
-
-  #   #start new servers
-  #   Enum.each(serverJoin, fn server ->
-  #     add_server(server, old_cluster)
-  #   end)
-
-  #   old_new_server_count= length(old_new_servers)
-  #   old_new_cluster= old_new_cluster
-  #   new_server_count= length(new_servers)
-  #   new_cluster= new_cluster
-
-  #   {old_new_server_count,
-  #   old_new_cluster,
-  #   new_server_count,
-  #   new_cluster}
+  # def handle_info({:join_cluster, new_server}, state) do
+  #   {_, _, machine_module, machine_args} = state
+  #   add_server(new_server, add_address(state.servers ++ [new_server]))
+  #   {:noreply, state}
   # end
 
-  # def changed_server_info() do
+  # def leader(:cast, :init, data = %Graft.State{log: [{prev_index, _, _} | _]}) do
+  #   Logger.info("New leader: #{inspect(data.me)}.")
 
   #   match_index =
   #     for server <- data.servers, into: %{} do
@@ -799,7 +821,8 @@ end
   #       {{:timeout, {:heartbeat, {name, node}}}, 0, :send_heartbeat}
   #     end
 
-  ################## NON-VOTING ###########################
-
+  #   {:keep_state,
+  #    %Graft.State{data | ready: ready, next_index: next_index, match_index: match_index}, events}
+  # end
 
 end

@@ -107,9 +107,39 @@ defmodule Graft do
 
   # ServerJoin = [:server1,...], ServerLeave = [:server1,...]
   def change_member(server, serverJoin \\ [], serverLeave \\ []) do
-    request(server, {:change, serverJoin, []})
-    request(server, {:change, [], serverLeave})
+    case {serverJoin, serverLeave} do
+      {[], []} ->
+        IO.puts("No membership change requested.")
+      {serverJoin, []} ->
+        add_member(server, serverJoin)
+      {[], serverLeave} ->
+        delete_member(server, serverLeave)
+      {serverJoin, serverLeave} ->
+        request(server, {:change, {serverJoin, []}})
+        request(server, {:change, {[], serverLeave}})
+    end
   end
+
+  def add_member(server, serverJoin) do
+    case serverJoin do
+      [] ->
+        IO.puts("No membership change requested.")
+      serverJoin ->
+        request(server, {:change, {serverJoin, []}})
+        request(server, {:change, :C_new})
+    end
+  end
+
+  def delete_member(server, serverLeave) do
+    case serverLeave do
+      [] ->
+        IO.puts("No membership change requested.")
+      serverLeave ->
+        request(server, {:change, :C_old_new})
+        request(server, {:change, {[], serverLeave}})
+    end
+  end
+
   def c(x) do
     change_member(x, [:server0], [:server2])
   end
