@@ -159,8 +159,14 @@ def follower(
             if data.servers != new_cluster do
               if cluster == 0 do
                 IO.puts("Follower #{inspect(data.me)} is appending the C_old_new change")
+                Logger.debug(
+                  "#{inspect(data.me)} is appending the C_old_new change. Replying to #{inspect(leader)} with success: true."
+                )
               else
                 IO.puts("Follower #{inspect(data.me)} is appending the C_new change")
+                Logger.debug(
+                  "#{inspect(data.me)} is appending the C_new change. Replying to #{inspect(leader)} with success: true."
+                )
               end
               {new_cluster, new_server_count}
             else {data.servers, data.server_count}
@@ -390,7 +396,7 @@ end
   def leader(
         {:call, from},
         {:entry, entry},
-        data = %Graft.State{log: log = [{prev_index, _, log_content} | _]}
+        data = %Graft.State{log: log = [{prev_index, _, _} | _]}
       ) do
 
     case entry do
@@ -410,8 +416,8 @@ end
               Logger.debug(
                 "#{inspect(data.me)} received a member change request C_old_new! Index of entry: #{prev_index + 1}."
                 )
-              {new_server_count, new_cluster} = seperated_member_change_RPC(data.servers, data.server_count, serverJoin, [])
-              servers = new_cluster
+              {new_server_count, new_cluster} = seperated_member_change_RPC(data.servers, serverJoin, [])
+              # servers = new_cluster
               IO.puts("C_old_new member change request recieved.")
               entry = {:change, %Graft.MemberChangeRPC{
                                 cluster: 0,
@@ -429,8 +435,8 @@ end
               Logger.debug(
                 "#{inspect(data.me)} received a member change request C_new! Index of entry: #{prev_index + 1}."
                 )
-              {new_server_count, new_cluster} = seperated_member_change_RPC(data.servers, data.server_count, [], serverLeave)
-              servers = new_cluster
+              {new_server_count, new_cluster} = seperated_member_change_RPC(data.servers, [], serverLeave)
+              # servers = new_cluster
               IO.puts("C_new member change request recieved.")
               entry = {:change, %Graft.MemberChangeRPC{
                                 cluster: 1,
@@ -751,7 +757,7 @@ end
   end
 
   # ############ Membership change #############
-  def seperated_member_change_RPC(old_cluster, server_count, serverJoin \\ [], serverLeave \\ []) do
+  def seperated_member_change_RPC(old_cluster, serverJoin \\ [], serverLeave \\ []) do
     old_servers = old_cluster |> Enum.map(&elem(&1, 0))
 
     new_server_name =
