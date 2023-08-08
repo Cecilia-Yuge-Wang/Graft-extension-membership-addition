@@ -402,22 +402,11 @@ end
     case entry do
       {:change, changeInfo} ->
         case changeInfo do
-            # {[], []} -> IO.puts("No membership change requested.")
-            #     servers = data.servers
-            #     requests = Map.put(data.requests, prev_index + 1, from)
-            #     events =
-            #       for server <- servers, server !== data.me, data.ready[server] === true do
-            #         {:next_event, :cast, {:send_append_entries, server}}
-            #       end
-            #     log = [{prev_index + 1, data.current_term, entry} | log]
-            #     {:keep_state, %Graft.State{data | log: log, requests: requests}, events}
-
             {serverJoin, []} ->
               Logger.debug(
                 "#{inspect(data.me)} received a member change request C_old_new! Index of entry: #{prev_index + 1}."
                 )
               {new_server_count, new_cluster} = seperated_member_change_RPC(data.servers, serverJoin, [])
-              # servers = new_cluster
               IO.puts("C_old_new member change request recieved.")
               entry = {:change, %Graft.MemberChangeRPC{
                                 cluster: 0,
@@ -436,7 +425,6 @@ end
                 "#{inspect(data.me)} received a member change request C_new! Index of entry: #{prev_index + 1}."
                 )
               {new_server_count, new_cluster} = seperated_member_change_RPC(data.servers, [], serverLeave)
-              # servers = new_cluster
               IO.puts("C_new member change request recieved.")
               entry = {:change, %Graft.MemberChangeRPC{
                                 cluster: 1,
@@ -564,8 +552,6 @@ end
       case newest_log_content do
         {:change, %Graft.MemberChangeRPC{
           cluster: cluster,
-          # old_new_server_count: old_new_server_count,
-          # old_new_cluster: old_new_cluster,
           new_server_count: new_server_count,
           new_cluster: new_cluster
         }} ->
