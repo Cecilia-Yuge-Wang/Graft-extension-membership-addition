@@ -105,7 +105,7 @@ defmodule Graft.Server do
 
   ### Append Entries Rules ###
 
-  def follower(:cast, %Graft.AppendEntriesRPC{term: term, leader_name: leader}, %Graft.State{
+  def follower(:cast, %Graft.AppendEntriesRPC{term: term, leader_name: leader, server_leave: server_leave}, data = %Graft.State{
         current_term: current_term,
         me: me
       })
@@ -127,64 +127,66 @@ def follower(
           prev_log_term: rpc_plt,
           leader_commit: leader_commit,
           entries: entries,
-          newest_entry_info: newest_entry_info
+          newest_entry_info: newest_entry_info,
+          server_leave: server_leave
         },
         data = %Graft.State{current_term: current_term, log: log, commit_index: commit_index}
       ) do
     resolve_ae = fn log ->
-      new_log =
-        [{last_new_index, last_new_term, _entry} | _tail] = append_entries(log, entries, rpc_pli)
+        new_log =
+          [{last_new_index, last_new_term, _entry} | _tail] = append_entries(log, entries, rpc_pli)
 
-      commit_index =
-        if leader_commit > commit_index,
-          do: min(leader_commit, last_new_index),
-          else: commit_index
+        commit_index =
+          if leader_commit > commit_index,
+            do: min(leader_commit, last_new_index),
+            else: commit_index
 
-      Logger.debug(
-        "#{inspect(data.me)} is appending the new entry. Replying to #{inspect(leader)} with success: true."
-      )
+        Logger.debug(
+          "#{inspect(data.me)} is appending the new entry. Replying to #{inspect(leader)} with success: true."
+        )
 
-      case entries do
-        [] -> reply(:ae, leader, data.me, current_term, true)
-        _ -> reply(:ae, leader, data.me, current_term, true, last_new_index, last_new_term)
-      end
-
-      {servers, server_count} =
-        case newest_entry_info do
-          {:change, %Graft.MemberChangeRPC{
-            cluster: cluster,
-            new_server_count: new_server_count,
-            new_cluster: new_cluster
-          }} ->
-            if data.servers != new_cluster do
-              if cluster == 0 do
-                IO.puts("Follower #{inspect(data.me)} is appending the C_old_new change")
-                Logger.debug(
-                  "#{inspect(data.me)} is appending the C_old_new change. Replying to #{inspect(leader)} with success: true."
-                )
-              else
-                IO.puts("Follower #{inspect(data.me)} is appending the C_new change")
-                Logger.debug(
-                  "#{inspect(data.me)} is appending the C_new change. Replying to #{inspect(leader)} with success: true."
-                )
-              end
-              {new_cluster, new_server_count}
-            else {data.servers, data.server_count}
-            end
-          _ ->
-            {data.servers, data.server_count}
+        case entries do
+          [] -> reply(:ae, leader, data.me, current_term, true)
+          _ -> reply(:ae, leader, data.me, current_term, true, last_new_index, last_new_term)
         end
 
-      {:keep_state,
-      %Graft.State{
-        data
-        | current_term: term,
-          log: new_log,
-          commit_index: commit_index,
-          leader: leader,
-          servers: servers,
-          server_count: server_count
-      }, [{{:timeout, :election_timeout}, generate_time_out(), :begin_election}]}
+        {servers, server_count} =
+          case newest_entry_info do
+            {:change, %Graft.MemberChangeRPC{
+              cluster: cluster,
+              new_server_count: new_server_count,
+              new_cluster: new_cluster
+            }} ->
+              if data.servers != new_cluster do
+                if cluster == 0 do
+                  IO.puts("Follower #{inspect(data.me)} is appending the C_old_new change")
+                  Logger.debug(
+                    "#{inspect(data.me)} is appending the C_old_new change. Replying to #{inspect(leader)} with success: true."
+                  )
+                else
+                  IO.puts("Follower #{inspect(data.me)} is appending the C_new change")
+                  Logger.debug(
+                    "#{inspect(data.me)} is appending the C_new change. Replying to #{inspect(leader)} with success: true."
+                  )
+                end
+                {new_cluster, new_server_count}
+              else
+                {data.servers, data.server_count}
+              end
+            _ ->
+              {data.servers, data.server_count}
+          end
+
+        {:keep_state,
+        %Graft.State{
+          data
+          | current_term: term,
+            log: new_log,
+            commit_index: commit_index,
+            leader: leader,
+            servers: servers,
+            server_count: server_count
+        }, [{{:timeout, :election_timeout}, generate_time_out(), :begin_election}]}
     end
 
     Logger.debug("#{inspect(data.me)} received AppendEntriesRPC from #{inspect(leader)}.")
@@ -208,9 +210,9 @@ def follower(
         })
 
         {:keep_state_and_data,
-        [{{:timeout, :election_timeout}, generate_time_out(), :begin_election}]}
+         [{{:timeout, :election_timeout}, generate_time_out(), :begin_election}]}
     end
-end
+  end
 
   def follower(:cast, :force_promotion, data) do
     {:next_state, :leader, data,
@@ -241,7 +243,11 @@ end
 
   def candidate({:timeout, :election_timeout}, :begin_election, data) do
     Logger.debug("#{inspect(data.me)} timed out as candidate. Restarting election...")
-    {:keep_state_and_data, [{:next_event, :cast, :request_votes}]}
+    if data.me in data.servers do
+      {:keep_state_and_data, [{:next_event, :cast, :request_votes}]}
+    else
+      {:next_state, :follower, data, []}
+    end
   end
 
   def candidate({:call, from}, {:entry, _entry}, %Graft.State{leader: leader}) do
@@ -304,7 +310,7 @@ end
 
     if votes + 1 > server_count / 2 do
       Logger.debug("#{inspect(data.me)} received majority votes! Becoming leader...")
-
+      IO.puts("#{inspect(data.me)} received majority votes! Becoming leader...")
       {:next_state, :leader, %Graft.State{data | votes: votes + 1},
        [{{:timeout, :election_timeout}, :infinity, :ok}, {:next_event, :cast, :init}]}
     else
@@ -338,10 +344,18 @@ end
   def leader(
         :cast,
         event,
-        data = %Graft.State{last_applied: last_applied, commit_index: commit_index}
+        data = %Graft.State{last_applied: last_applied, commit_index: commit_index, log: [{prev_index, _, entry} | _]}
       )
       when commit_index > last_applied do
-    response = apply_entry(last_applied + 1, data.log, data.machine)
+        response =
+          case entry do
+            {:change, change_data} ->
+                  "Member change processing..."
+            _ ->
+              apply_entry(last_applied + 1, data.log, data.machine)
+          end
+
+    #not send change msg to machine but still update data
 
     {:keep_state, %Graft.State{data | last_applied: last_applied + 1},
      [{:reply, data.requests[last_applied + 1], {:ok, response}}, {:next_event, :cast, event}]}
@@ -381,8 +395,8 @@ end
   end
 
   def leader({:timeout, {:heartbeat, server}}, :send_heartbeat, %Graft.State{me: me}) do
-    Logger.debug("#{inspect(me)} is sending a heartbeat RPC to #{inspect(server)}.")
-    {:keep_state_and_data, [{:next_event, :cast, {:send_append_entries, server}}]}
+      Logger.debug("#{inspect(me)} is sending a heartbeat RPC to #{inspect(server)}.")
+      {:keep_state_and_data, [{:next_event, :cast, {:send_append_entries, server}}]}
   end
 
   ### Request Vote Rules ###
@@ -410,50 +424,55 @@ end
               IO.puts("C_old_new member change request recieved.")
               entry = {:change, %Graft.MemberChangeRPC{
                                 cluster: 0,
+                                old_cluster: data.servers,
                                 new_server_count: new_server_count,
                                 new_cluster: new_cluster}}
-              requests = Map.put(data.requests, prev_index + 1, from)
-              events =
-                for server <- new_cluster, server !== data.me, data.ready[server] === true do
-                  {:next_event, :cast, {:send_append_entries, server}}
-                end
-              log = [{prev_index + 1, data.current_term, entry} | log]
-              {:keep_state, %Graft.State{data | log: log, requests: requests}, events}
+              ready =
+                Enum.reduce(new_cluster, data.ready, fn {server, node}, acc ->
+                  case Map.get(acc, {server, node}) do
+                    nil -> Map.put(acc, {server, node}, true)
+                     _ -> acc
+                  end
+                end)
 
-            {[], serverLeave} ->
-              Logger.debug(
-                "#{inspect(data.me)} received a member change request C_new! Index of entry: #{prev_index + 1}."
-                )
-              {new_server_count, new_cluster} = seperated_member_change_RPC(data.servers, [], serverLeave)
-              IO.puts("C_new member change request recieved.")
-              entry = {:change, %Graft.MemberChangeRPC{
-                                cluster: 1,
-                                new_server_count: new_server_count,
-                                new_cluster: new_cluster}}
-              requests = Map.put(data.requests, prev_index + 1, from)
-              events =
-                for server <- new_cluster, server !== data.me, data.ready[server] === true do
-                  {:next_event, :cast, {:send_append_entries, server}}
-                end
-              log = [{prev_index + 1, data.current_term, entry} | log]
-              {:keep_state, %Graft.State{data | log: log, requests: requests}, events}
+              match_index =
+                Enum.reduce(new_cluster, data.match_index, fn {server, node}, acc ->
+                  case Map.get(acc, {server, node}) do
+                    nil -> Map.put(acc, {server, node}, 0)
+                    _ -> acc
+                  end
+                end)
 
-            :C_old_new ->
-              Logger.debug(
-                "#{inspect(data.me)} received a member change request C_old_new! Index of entry: #{prev_index + 1}."
-                )
-              IO.puts("C_old_new member change request recieved.(no change)")
-              entry = {:change, %Graft.MemberChangeRPC{
-                                cluster: 0,
-                                new_server_count: data.server_count,
-                                new_cluster: data.servers}}
+              next_index =
+                Enum.reduce(new_cluster, data.next_index, fn {server, node}, acc ->
+                  case Map.get(acc, {server, node}) do
+                    nil -> Map.put(acc, {server, node}, prev_index + 1)
+                    _ -> acc
+                  end
+                end)
+
               requests = Map.put(data.requests, prev_index + 1, from)
+              new = new_cluster -- data.servers
               events =
+                for server <- new do
+                  IO.puts("send to new servers")
+                  IO.inspect(server)
+                  {{:timeout, {:heartbeat, server}}, 0, :send_heartbeat}
+                end
+                ++
                 for server <- data.servers, server !== data.me, data.ready[server] === true do
+                  IO.puts("send C old new to servers")
+                  IO.inspect(server)
                   {:next_event, :cast, {:send_append_entries, server}}
                 end
               log = [{prev_index + 1, data.current_term, entry} | log]
-              {:keep_state, %Graft.State{data | log: log, requests: requests}, events}
+              {:keep_state, %Graft.State{data |
+              log: log,
+              requests: requests,
+              ready: ready,
+              next_index: next_index,
+              match_index: match_index
+              }, events}
 
             :C_new ->
               Logger.debug(
@@ -462,6 +481,7 @@ end
               IO.puts("C_new member change request recieved.(no change)")
               entry = {:change, %Graft.MemberChangeRPC{
                                 cluster: 1,
+                                old_cluster: data.servers,
                                 new_server_count: data.server_count,
                                 new_cluster: data.servers}}
               requests = Map.put(data.requests, prev_index + 1, from)
@@ -476,10 +496,9 @@ end
               Logger.debug(
                 "#{inspect(data.me)} received a request from a client! Index of entry: #{prev_index + 1}."
               )
-                servers = data.servers
                 requests = Map.put(data.requests, prev_index + 1, from)
                 events =
-                  for server <- servers, server !== data.me, data.ready[server] === true do
+                  for server <- data.servers, server !== data.me, data.ready[server] === true do
                     {:next_event, :cast, {:send_append_entries, server}}
                   end
                 log = [{prev_index + 1, data.current_term, entry} | log]
@@ -507,13 +526,13 @@ end
         data
       )
       when lli === -1 do
-    ready = %{data.ready | from => true}
+      ready = %{data.ready | from => true}
     {:keep_state, %Graft.State{data | ready: ready}, []}
   end
 
   def leader(
         :cast,
-        %Graft.AppendEntriesRPCReply{
+        rpc = %Graft.AppendEntriesRPCReply{
           success: true,
           last_log_index: lli,
           last_log_term: llt,
@@ -536,44 +555,83 @@ end
         [{:next_event, :cast, {:send_append_entries, from}}]
       end
 
-    commit_index =
       if lli > data.commit_index and llt === data.current_term do
         number_of_matches =
           Enum.reduce(match_index, 1, fn {server, index}, acc ->
             if server !== data.me and index >= lli, do: acc + 1, else: acc
           end)
+            case newest_log_content do
+              {:change, %Graft.MemberChangeRPC{
+                cluster: cluster,
+                old_cluster: _old_cluster,
+                new_server_count: new_server_count,
+                new_cluster: new_cluster
+              }} ->
+                if number_of_matches > new_server_count / 2 do
+                    case cluster do
+                      0 -> IO.puts("leader recieve successful C old_new change reply, number_of_matches: #{inspect(number_of_matches)}")
+                        {:keep_state,
+                          %Graft.State{
+                            data
+                            | ready: ready,
+                              next_index: next_index,
+                              commit_index: lli,
+                              match_index: match_index,
+                              server_count: new_server_count,
+                              servers: new_cluster
+                          }, events}
+                      1 -> IO.puts("leader recieve successful C new change reply, number_of_matches: #{inspect(number_of_matches)}")
+                          {:keep_state,
+                            %Graft.State{
+                              data
+                              | ready: Map.take(ready, new_cluster),
+                                next_index: Map.take(next_index, new_cluster),
+                                commit_index: lli,
+                                match_index: Map.take(match_index, new_cluster),
+                                server_count: new_server_count,
+                                servers: new_cluster
+                            }, events}
+                      end
+                else
+                  {:keep_state,
+                    %Graft.State{
+                      data
+                      | ready: ready,
+                        next_index: next_index,
+                        match_index: match_index
+                    }, events}
+                end
 
-        if number_of_matches > data.server_count / 2, do: lli, else: data.commit_index
-      else
-        data.commit_index
-      end
-
-    {servers, server_count} =
-      case newest_log_content do
-        {:change, %Graft.MemberChangeRPC{
-          cluster: cluster,
-          new_server_count: new_server_count,
-          new_cluster: new_cluster
-        }} ->
-            case cluster do
-              0 ->IO.puts("leader recieve successful C old_new change reply from #{inspect(from)}")
-              1 -> IO.puts("leader recieve successful C new change reply from #{inspect(from)}")
+              _->
+                if number_of_matches > data.server_count / 2 do
+                  {:keep_state,
+                    %Graft.State{
+                      data
+                      | ready: ready,
+                        next_index: next_index,
+                        commit_index: lli,
+                        match_index: match_index
+                    }, events}
+                else
+                  {:keep_state,
+                    %Graft.State{
+                      data
+                      | ready: ready,
+                        next_index: next_index,
+                        match_index: match_index
+                    }, events}
+                end
             end
-            {new_cluster, new_server_count}
 
-        _->
-            {data.servers, data.server_count}
-      end
-          {:keep_state,
+      else
+        {:keep_state,
           %Graft.State{
             data
             | ready: ready,
               next_index: next_index,
-              commit_index: commit_index,
-              match_index: match_index,
-              server_count: server_count,
-              servers: servers
+              match_index: match_index
           }, events}
+      end
   end
 
   def leader(:cast, %Graft.AppendEntriesRPCReply{success: false, from: from}, data) do
@@ -594,40 +652,52 @@ end
         {:send_append_entries, to},
         data = %Graft.State{ready: ready, log: log = [{last_index, _, last_log} | _tail]}
       ) do
-    ready = %{ready | to => false}
+        if to in data.servers and to not in data.server_leave do
+          ready =
+            # if Map.has_key?(data.ready, to) == true do
+              %{data.ready | to => false}
+            # end
 
-    entry =
-      if (next = data.next_index[to]) > last_index do
-        []
-      else
-        {^next, term, entry} = Enum.reverse(log) |> Enum.at(next)
-        [{term, entry}]
-      end
+          entry =
+            if (next = data.next_index[to]) > last_index do
+              []
+            else
+              {^next, term, entry} = Enum.reverse(log) |> Enum.at(next)
+              [{term, entry}]
+            end
 
-    {prev_index, prev_term, _prev_enrty} =
-      case log do
-        [{0, 0, nil}] -> {0, 0, nil}
-        _ -> Enum.reverse(log) |> Enum.at(next - 1)
-      end
+          {prev_index, prev_term, _prev_enrty} =
+            case next do
+              nil -> {0, 0, nil}
+              _ ->
+                  case log do
+                    [{0, 0, nil}] -> {0, 0, nil}
+                    _ -> Enum.reverse(log) |> Enum.at(next - 1)
+                  end
+              end
 
-    rpc = %Graft.AppendEntriesRPC{
-      term: data.current_term,
-      leader_name: data.me,
-      prev_log_index: prev_index,
-      prev_log_term: prev_term,
-      entries: entry,
-      leader_commit: data.commit_index,
-      newest_entry_info: last_log
-    }
+          rpc = %Graft.AppendEntriesRPC{
+            term: data.current_term,
+            leader_name: data.me,
+            prev_log_index: prev_index,
+            prev_log_term: prev_term,
+            entries: entry,
+            leader_commit: data.commit_index,
+            newest_entry_info: last_log
+          }
 
-    Logger.debug(
-      "#{inspect(data.me)} is sending an AppendEntriesRPC to #{inspect(to)}. RPC: #{inspect(rpc)}."
-    )
+          Logger.debug(
+            "#{inspect(data.me)} is sending an AppendEntriesRPC to #{inspect(to)}. RPC: #{inspect(rpc)}."
+          )
 
-    GenStateMachine.cast(to, rpc)
+          GenStateMachine.cast(to, rpc)
 
-    {:keep_state, %Graft.State{data | ready: ready},
-     [{{:timeout, {:heartbeat, to}}, @heartbeat, :send_heartbeat}]}
+          {:keep_state, %Graft.State{data | ready: ready},
+          [{{:timeout, {:heartbeat, to}}, @heartbeat, :send_heartbeat}]}
+        else
+          GenStateMachine.cast(to, :ok)
+          {:keep_state_and_data, []}
+        end
   end
 
   ### Default ###
@@ -738,7 +808,6 @@ end
       log
       |> Enum.reverse()
       |> Enum.at(apply_index)
-
     Graft.Machine.apply_entry(machine, entry)
   end
 
@@ -776,45 +845,11 @@ end
     ]
     start_link(server, servers, machine_module, machine_args)
     init([server, servers, machine_module, machine_args])
-    # GenStateMachine.cast(server, :start)
   end
 
   def add_address(servers) do
     node_address=elem(hd(Application.fetch_env!(:graft, :cluster)),1)
     Enum.map(servers, fn server -> {server, node_address} end)
   end
-
-  # def handle_info({:join_cluster, new_server}, state) do
-  #   {_, _, machine_module, machine_args} = state
-  #   add_server(new_server, add_address(state.servers ++ [new_server]))
-  #   {:noreply, state}
-  # end
-
-  # def leader(:cast, :init, data = %Graft.State{log: [{prev_index, _, _} | _]}) do
-  #   Logger.info("New leader: #{inspect(data.me)}.")
-
-  #   match_index =
-  #     for server <- data.servers, into: %{} do
-  #       {server, 0}
-  #     end
-
-  #   ready =
-  #     for server <- data.servers, into: %{} do
-  #       {server, true}
-  #     end
-
-  #   next_index =
-  #     for server <- data.servers, into: %{} do
-  #       {server, prev_index + 1}
-  #     end
-
-  #   events =
-  #     for server = {name, node} <- data.servers, server !== data.me do
-  #       {{:timeout, {:heartbeat, {name, node}}}, 0, :send_heartbeat}
-  #     end
-
-  #   {:keep_state,
-  #    %Graft.State{data | ready: ready, next_index: next_index, match_index: match_index}, events}
-  # end
 
 end
