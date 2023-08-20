@@ -18,6 +18,17 @@ defmodule Graft.Supervisor do
     supervise(children, strategy: :one_for_one)
   end
 
+  def add_server(name, all_servers, machine_module, machine_args) do
+    Logger.info("Adding server #{name} to the cluster")
+
+    Supervisor.start_child(__MODULE__, [name, all_servers, machine_module, machine_args])
+
+    new_servers = all_servers ++ [{name, node()}]
+    Supervisor.restart_child(__MODULE__, {__MODULE__, {new_servers, all_servers}, machine_module, machine_args})
+
+    Logger.info("Server #{name} added to the cluster")
+  end
+
   defp cluster_config() do
     [
       Application.fetch_env!(:graft, :cluster) |> on_my_node(),

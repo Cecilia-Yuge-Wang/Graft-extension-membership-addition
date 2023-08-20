@@ -29,8 +29,8 @@ defmodule Graft.State do
             # the replicated state machine pid
             machine: nil,
             # for each request, the address of the client who requested it
-            requests: %{}
+            requests: %{},
             # ######### member change #########
-            # server_join:[],
-            # server_leave:[]
+            server_leave: [],
+            hear_from_leader: 0
 end

@@ -106,19 +106,19 @@ defmodule Graft do
   ################ Membership change ##########################
 
   # ServerJoin = [:server1,...], ServerLeave = [:server1,...]
-  def change_member(server, serverJoin \\ [], serverLeave \\ []) do
-    case {serverJoin, serverLeave} do
-      {[], []} ->
-        IO.puts("No membership change requested.")
-      {serverJoin, []} ->
-        add_member(server, serverJoin)
-      {[], serverLeave} ->
-        delete_member(server, serverLeave)
-      {serverJoin, serverLeave} ->
-        request(server, {:change, {serverJoin, []}})
-        request(server, {:change, {[], serverLeave}})
-    end
-  end
+  # def change_member(server, serverJoin \\ [], serverLeave \\ []) do
+  #   case {serverJoin, serverLeave} do
+  #     {[], []} ->
+  #       IO.puts("No membership change requested.")
+  #     {serverJoin, []} ->
+  #       add_member(server, serverJoin)
+  #     {[], serverLeave} ->
+  #       delete_member(server, serverLeave)
+  #     {serverJoin, serverLeave} ->
+  #       request(server, {:change, {serverJoin, []}})
+  #       request(server, {:change, {[], serverLeave}})
+  #   end
+  # end
 
   def add_member(server, serverJoin) do
     case serverJoin do
@@ -130,18 +130,23 @@ defmodule Graft do
     end
   end
 
-  def delete_member(server, serverLeave) do
-    case serverLeave do
-      [] ->
-        IO.puts("No membership change requested.")
-      serverLeave ->
-        request(server, {:change, :C_old_new})
-        request(server, {:change, {[], serverLeave}})
-    end
-  end
+  # def delete_member(server, serverLeave) do
+  #   case serverLeave do
+  #     [] ->
+  #       IO.puts("No membership change requested.")
+  #     serverLeave ->
+  #       request(server, {:change, :C_old_new})
+  #       request(server, {:change, {[], serverLeave}})
+  #   end
+  # end
 
   def c(x) do
-    change_member(x, [:server0], [:server2])
+    add_member(x, [:server0, :server9])
+    # change_member(x, [:server0], [:server2])
   end
+
+  def s(), do: Graft.Simulation.start_simulation
+
+  def d(), do: Graft.Processor.process_files("member_added_timestamp1.txt", "add_member_timestamp1.txt", "output_2server_0log.txt")
 
 end

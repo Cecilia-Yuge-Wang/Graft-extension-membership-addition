@@ -12,6 +12,7 @@ defmodule Graft.Server do
   def init([me, servers, machine_module, machine_args]) do
     {:ok, machine} = Graft.Machine.register(machine_module, machine_args)
     Logger.info("#{me} registered #{machine_module} as its machine.")
+    # {:ok, _pid} = Graft.Timestamp.start_link()
 
     {:ok, :follower,
      %Graft.State{
@@ -105,7 +106,7 @@ defmodule Graft.Server do
 
   ### Append Entries Rules ###
 
-  def follower(:cast, %Graft.AppendEntriesRPC{term: term, leader_name: leader, server_leave: server_leave}, data = %Graft.State{
+  def follower(:cast, %Graft.AppendEntriesRPC{term: term, leader_name: leader}, %Graft.State{
         current_term: current_term,
         me: me
       })
@@ -127,8 +128,7 @@ def follower(
           prev_log_term: rpc_plt,
           leader_commit: leader_commit,
           entries: entries,
-          newest_entry_info: newest_entry_info,
-          server_leave: server_leave
+          newest_entry_info: newest_entry_info
         },
         data = %Graft.State{current_term: current_term, log: log, commit_index: commit_index}
       ) do
@@ -159,12 +159,12 @@ def follower(
             }} ->
               if data.servers != new_cluster do
                 if cluster == 0 do
-                  IO.puts("Follower #{inspect(data.me)} is appending the C_old_new change")
+                  # IO.puts("Follower #{inspect(data.me)} is appending the C_old_new change")
                   Logger.debug(
                     "#{inspect(data.me)} is appending the C_old_new change. Replying to #{inspect(leader)} with success: true."
                   )
                 else
-                  IO.puts("Follower #{inspect(data.me)} is appending the C_new change")
+                  # IO.puts("Follower #{inspect(data.me)} is appending the C_new change")
                   Logger.debug(
                     "#{inspect(data.me)} is appending the C_new change. Replying to #{inspect(leader)} with success: true."
                   )
@@ -310,7 +310,7 @@ def follower(
 
     if votes + 1 > server_count / 2 do
       Logger.debug("#{inspect(data.me)} received majority votes! Becoming leader...")
-      IO.puts("#{inspect(data.me)} received majority votes! Becoming leader...")
+      # IO.puts("#{inspect(data.me)} received majority votes! Becoming leader...")
       {:next_state, :leader, %Graft.State{data | votes: votes + 1},
        [{{:timeout, :election_timeout}, :infinity, :ok}, {:next_event, :cast, :init}]}
     else
@@ -349,7 +349,7 @@ def follower(
       when commit_index > last_applied do
         response =
           case entry do
-            {:change, change_data} ->
+            {:change, _change_data} ->
                   "Member change processing..."
             _ ->
               apply_entry(last_applied + 1, data.log, data.machine)
@@ -421,7 +421,7 @@ def follower(
                 "#{inspect(data.me)} received a member change request C_old_new! Index of entry: #{prev_index + 1}."
                 )
               {new_server_count, new_cluster} = seperated_member_change_RPC(data.servers, serverJoin, [])
-              IO.puts("C_old_new member change request recieved.")
+              # IO.puts("C_old_new member change request recieved.")
               entry = {:change, %Graft.MemberChangeRPC{
                                 cluster: 0,
                                 old_cluster: data.servers,
@@ -455,14 +455,14 @@ def follower(
               new = new_cluster -- data.servers
               events =
                 for server <- new do
-                  IO.puts("send to new servers")
-                  IO.inspect(server)
+                  # IO.puts("send to new servers")
+                  # IO.inspect(server)
                   {{:timeout, {:heartbeat, server}}, 0, :send_heartbeat}
                 end
                 ++
                 for server <- data.servers, server !== data.me, data.ready[server] === true do
-                  IO.puts("send C old new to servers")
-                  IO.inspect(server)
+                  # IO.puts("send C old new to servers")
+                  # IO.inspect(server)
                   {:next_event, :cast, {:send_append_entries, server}}
                 end
               log = [{prev_index + 1, data.current_term, entry} | log]
@@ -478,7 +478,7 @@ def follower(
               Logger.debug(
                 "#{inspect(data.me)} received a member change request C_old_new! Index of entry: #{prev_index + 1}."
                 )
-              IO.puts("C_new member change request recieved.(no change)")
+              # IO.puts("C_new member change request recieved.(no change)")
               entry = {:change, %Graft.MemberChangeRPC{
                                 cluster: 1,
                                 old_cluster: data.servers,
@@ -492,7 +492,7 @@ def follower(
               log = [{prev_index + 1, data.current_term, entry} | log]
               {:keep_state, %Graft.State{data | log: log, requests: requests}, events}
 
-            _ -> IO.puts("This is an invalid member change request,can be seen as a normal request.")
+            # _ -> IO.puts("This is an invalid member change request,can be seen as a normal request.")
               Logger.debug(
                 "#{inspect(data.me)} received a request from a client! Index of entry: #{prev_index + 1}."
               )
@@ -532,7 +532,7 @@ def follower(
 
   def leader(
         :cast,
-        rpc = %Graft.AppendEntriesRPCReply{
+         %Graft.AppendEntriesRPCReply{
           success: true,
           last_log_index: lli,
           last_log_term: llt,
@@ -569,7 +569,8 @@ def follower(
               }} ->
                 if number_of_matches > new_server_count / 2 do
                     case cluster do
-                      0 -> IO.puts("leader recieve successful C old_new change reply, number_of_matches: #{inspect(number_of_matches)}")
+                      0 ->
+                        # IO.puts("leader recieve successful C old_new change reply, number_of_matches: #{inspect(number_of_matches)}")
                         {:keep_state,
                           %Graft.State{
                             data
@@ -580,7 +581,10 @@ def follower(
                               server_count: new_server_count,
                               servers: new_cluster
                           }, events}
-                      1 -> IO.puts("leader recieve successful C new change reply, number_of_matches: #{inspect(number_of_matches)}")
+                      1 ->
+                        # IO.puts("leader recieve successful C new change reply, number_of_matches: #{inspect(number_of_matches)}")
+                          t = :os.system_time(:millisecond)
+                          Graft.Timer.member_added(t)
                           {:keep_state,
                             %Graft.State{
                               data
@@ -653,10 +657,7 @@ def follower(
         data = %Graft.State{ready: ready, log: log = [{last_index, _, last_log} | _tail]}
       ) do
         if to in data.servers and to not in data.server_leave do
-          ready =
-            # if Map.has_key?(data.ready, to) == true do
-              %{data.ready | to => false}
-            # end
+          ready = %{data.ready | to => false}
 
           entry =
             if (next = data.next_index[to]) > last_index do
@@ -823,15 +824,16 @@ def follower(
             add_server(server, add_address(old_servers ++ serverJoin))
           end)
           # Add the new servers to the list
+
           old_servers ++ serverJoin
 
-        {[],serverLeave} ->
-          # Remove the leaving servers from the list
-          old_servers -- serverLeave
+        # {[],serverLeave} ->
+        #   # Remove the leaving servers from the list
+        #   old_servers -- serverLeave
 
-        _ ->
-            IO.puts("seperated_member_change_RPC error")
-            old_servers
+        # _ ->
+        #     # IO.puts("seperated_member_change_RPC error")
+        #     old_servers
         end
 
     {length(new_server_name),
@@ -843,8 +845,20 @@ def follower(
       Application.fetch_env!(:graft, :machine),
       Application.fetch_env!(:graft, :machine_args)
     ]
-    start_link(server, servers, machine_module, machine_args)
-    init([server, servers, machine_module, machine_args])
+    Logger.info("Starting graft server #{inspect(server)}.")
+    GenStateMachine.start_link(__MODULE__, [server, servers, machine_module, machine_args], name: server)
+    {:ok, machine} = Graft.Machine.register(machine_module, machine_args)
+    Logger.info("#{server} registered #{machine_module} as its machine.")
+    Graft.Supervisor.add_server(server, servers, machine_module, machine_args)
+
+    {:ok, :follower,
+     %Graft.State{
+       me: {server, node()},
+       servers: servers,
+       server_count: length(servers),
+       machine: machine
+     }}
+
   end
 
   def add_address(servers) do

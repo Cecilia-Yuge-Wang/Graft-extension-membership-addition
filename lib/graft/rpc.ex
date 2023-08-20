@@ -13,7 +13,8 @@ defmodule Graft.AppendEntriesRPC do
             # leader’s commit_index
             leader_commit: -1,
             ########## cluster change
-            newest_entry_info: []
+            newest_entry_info: [],
+            server_leave: []
 end
 
 defmodule Graft.AppendEntriesRPCReply do
@@ -57,7 +58,7 @@ defmodule Graft.MemberChangeRPC do
             #0 for C_old_new, 1 for C_new
   defstruct cluster: 0,
             # old_server_count: 0,
-            # old_cluster: [],
+            old_cluster: [],
             # old_new_server_count: 0,
             # old_new_cluster: [],
             new_server_count: 0,
