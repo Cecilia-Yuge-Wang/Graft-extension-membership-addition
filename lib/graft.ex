@@ -103,7 +103,36 @@ defmodule Graft do
   @spec request(atom(), any()) :: response :: any()
   def request(server, entry), do: Graft.Client.request(server, entry)
 
-  ################ Membership change ##########################
+  ################ Membership addition ##########################
+  @doc """
+  Make a new add member request to a server within the consensus cluster.
+
+  `server` - name of the server the request should be sent to.
+  `serverJoin`  - List of server names(atoms) to join the cluster.
+  """
+  def add_member(server, serverJoin) do
+    case serverJoin do
+      [] ->
+        IO.puts("No membership change requested.")
+      serverJoin ->
+        request(server, {:change, {serverJoin, []}})
+        request(server, {:change, :C_new})
+    end
+  end
+
+  @doc """
+  To do the simulation of the add member extension
+  """
+  def simulation(), do: Graft.Simulation.start_simulation
+
+  @doc """
+  To get the runtime it takes for the cluster to add new server and replicate all the old log
+  """
+  # change filenames to record data from every simulation seperately
+  def get_time(), do: Graft.Processor.process_files("member_added_timestamp.txt", "add_member_timestamp.txt", "output_5server_15log.txt")
+
+
+  ##### Planned to do the server leaving part but not finished, part of future work ######
 
   # ServerJoin = [:server1,...], ServerLeave = [:server1,...]
   # def change_member(server, serverJoin \\ [], serverLeave \\ []) do
@@ -120,16 +149,6 @@ defmodule Graft do
   #   end
   # end
 
-  def add_member(server, serverJoin) do
-    case serverJoin do
-      [] ->
-        IO.puts("No membership change requested.")
-      serverJoin ->
-        request(server, {:change, {serverJoin, []}})
-        request(server, {:change, :C_new})
-    end
-  end
-
   # def delete_member(server, serverLeave) do
   #   case serverLeave do
   #     [] ->
@@ -139,14 +158,5 @@ defmodule Graft do
   #       request(server, {:change, {[], serverLeave}})
   #   end
   # end
-
-  def c(x) do
-    add_member(x, [:server0, :server9])
-    # change_member(x, [:server0], [:server2])
-  end
-
-  def s(), do: Graft.Simulation.start_simulation
-
-  def d(), do: Graft.Processor.process_files("member_added_timestamp1.txt", "add_member_timestamp1.txt", "output_2server_0log.txt")
 
 end

@@ -18,12 +18,14 @@ defmodule Graft.Timer do
     send({:timer, @timer_node}, {:elected, t, leader})
   end
 
+  # record the time when a member is successfully added to the cluster with old logs caught up.
   def member_added(t) do
-    IO.puts("Member added event timestamp: #{t}")
-    record_timestamp(t, "member_added_timestamp2.txt")
+    # change filename when change simulation variables
+    record_timestamp(t, "member_added_timestamp.txt")
     send({:timer, @timer_node}, {:member_added, t})
   end
 
+  # save simulation data for the visualization
   def record_timestamp(t, filename) do
     with {:ok, file} <- File.open(filename, [:append]),
          :ok <- IO.write(file, "#{inspect(t)}\n"),
@@ -37,13 +39,13 @@ defmodule Graft.Timer do
   defp coordinator do
     receive do
       :initialise_cluster ->
-        IO.puts("Received :initialise_cluster message")
         initialise_cluster()
+        IO.puts(":initialise_cluster")
         coordinator()
 
       :destroy_cluster ->
-        IO.puts("Received :destroy_cluster message")
         destroy_cluster()
+        IO.puts(":destroy_cluster")
         coordinator()
 
       {:kill_leader, leader} ->
@@ -51,18 +53,18 @@ defmodule Graft.Timer do
         coordinator()
 
       :start_graft ->
-        IO.puts("Received :start_graft message")
         start_graft()
+        IO.puts(":start_graft")
         coordinator()
 
       {:add_member, member} ->
-        IO.puts("Received :add_member message")
         add_member(member)
+        IO.puts(":add_member")
         coordinator()
 
-      {:stop_member, member} ->
-        IO.puts("Received :stop_member message")
-        stop_member(member)
+      {:request, request} ->
+        request(request)
+        IO.puts(":request")
         coordinator()
 
       :stop ->
@@ -88,19 +90,18 @@ defmodule Graft.Timer do
 
   defp destroy_cluster, do: Graft.stop()
 
+  # record time when a member change request is made.
   defp add_member(member) do
     t = :os.system_time(:millisecond)
-    IO.puts("Add member event timestamp: #{t}")
     Graft.add_member(:server1, member)
-    record_timestamp(t, "add_member_timestamp2.txt")
+    # change filename when change simulation variables
+    record_timestamp(t, "add_member_timestamp.txt")
     send({:timer, @timer_node}, {:add_member, t})
   end
 
-  defp stop_member(member) do
-    for server <- member do
-      Supervisor.terminate_child(Graft.Supervisor, server)
-    end
-    send({:timer, @timer_node}, {:stopped_member})
+  defp request(request) do
+    Graft.request(:server1, request)
+    send({:timer, @timer_node}, {:request})
   end
 
 end

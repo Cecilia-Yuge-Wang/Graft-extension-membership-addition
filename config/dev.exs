@@ -7,11 +7,6 @@ config :graft,
     {:server3, :"nonode@nohost"},
     {:server4, :"nonode@nohost"},
     {:server5, :"nonode@nohost"}
-    # ,{:server6, :"nonode@nohost"},
-    # {:server7, :"nonode@nohost"},
-    # {:server8, :"nonode@nohost"},
-    # {:server9, :"nonode@nohost"},
-    # {:server0, :"nonode@nohost"}
   ],
   machine: MySumMachine,
   machine_args: [],
