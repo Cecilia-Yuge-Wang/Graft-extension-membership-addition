@@ -21,7 +21,7 @@ defmodule Graft.Timer do
   # record the time when a member is successfully added to the cluster with old logs caught up.
   def member_added(t) do
     # change filename when change simulation variables
-    record_timestamp(t, "member_added_timestamp.txt")
+    record_timestamp(t, "evaluations/member_added_timestamp.txt")
     send({:timer, @timer_node}, {:member_added, t})
   end
 
@@ -95,7 +95,7 @@ defmodule Graft.Timer do
     t = :os.system_time(:millisecond)
     Graft.add_member(:server1, member)
     # change filename when change simulation variables
-    record_timestamp(t, "add_member_timestamp.txt")
+    record_timestamp(t, "evaluations/add_member_timestamp.txt")
     send({:timer, @timer_node}, {:add_member, t})
   end
 

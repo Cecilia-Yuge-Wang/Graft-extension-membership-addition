@@ -129,7 +129,7 @@ defmodule Graft do
   To get the runtime it takes for the cluster to add new server and replicate all the old log
   """
   # change filenames to record data from every simulation seperately
-  def get_time(), do: Graft.Processor.process_files("member_added_timestamp.txt", "add_member_timestamp.txt", "output_5server_15log.txt")
+  def get_time(), do: Graft.Processor.process_files("evaluations/member_added_timestamp.txt", "evaluations/add_member_timestamp.txt", "evaluations/output_5server_15log.txt")
 
 
   ##### Planned to do the server leaving part but not finished, part of future work ######

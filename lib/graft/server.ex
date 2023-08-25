@@ -654,7 +654,7 @@ def follower(
   def leader(
         :cast,
         {:send_append_entries, to},
-        data = %Graft.State{ready: ready, log: log = [{last_index, _, last_log} | _tail]}
+        data = %Graft.State{log: log = [{last_index, _, last_log} | _tail]}
       ) do
         if to in data.servers and to not in data.server_leave do
           ready = %{data.ready | to => false}

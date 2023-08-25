@@ -8,18 +8,18 @@ defmodule Graft.Simulation do
 
     coordinator_pid = Process.whereis(:coordinator)
 
-    #change the list to change number of server
+    # change the list to change number of server
     member = [:server00]
 
-    #number of simulation
+    # number of simulation
     for _ <- 1..500 do
       send(coordinator_pid, :initialise_cluster)
       :timer.sleep(1000)
       send(coordinator_pid, :start_graft)
       :timer.sleep(1000)
-      #number of logs
+      # i: number of logs
       for i <- 1..10 do
-        IO.puts(a)
+        IO.puts(i)
         send(coordinator_pid, {:request, i})
         :timer.sleep(1000)
       end
