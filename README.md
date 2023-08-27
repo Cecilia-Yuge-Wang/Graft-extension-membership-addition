@@ -1,3 +1,26 @@
+### This repository is a extension of Graft with the member addition function.
+
+A add_member function is added to the original Graft library.
+
+### A example:
+
+Start the application
+```cmd
+path\graft> iex -S mix
+```
+```shell
+iex(1)> Graft.start
+[:ok, :ok, :ok, :ok, :ok]
+```
+Add new members
+```shell
+iex(2)> Graft.add_member(:server1,[:server9, :server8])
+"Member change processing..."
+```
+
+
+
+The original library：
 # Graft
 Graft offers an Elixir implementation of the raft consensus algorithm, allowing the creation of a distributed cluster of servers, where each server manages a replicated state machine. The `Graft.Machine` behaviour allows users to define their own replicated state machines, that may handle user defined client requests.
 
