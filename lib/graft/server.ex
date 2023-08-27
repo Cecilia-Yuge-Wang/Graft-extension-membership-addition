@@ -12,7 +12,6 @@ defmodule Graft.Server do
   def init([me, servers, machine_module, machine_args]) do
     {:ok, machine} = Graft.Machine.register(machine_module, machine_args)
     Logger.info("#{me} registered #{machine_module} as its machine.")
-    # {:ok, _pid} = Graft.Timestamp.start_link()
 
     {:ok, :follower,
      %Graft.State{
@@ -243,11 +242,7 @@ def follower(
 
   def candidate({:timeout, :election_timeout}, :begin_election, data) do
     Logger.debug("#{inspect(data.me)} timed out as candidate. Restarting election...")
-    if data.me in data.servers do
       {:keep_state_and_data, [{:next_event, :cast, :request_votes}]}
-    else
-      {:next_state, :follower, data, []}
-    end
   end
 
   def candidate({:call, from}, {:entry, _entry}, %Graft.State{leader: leader}) do
