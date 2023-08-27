@@ -8,15 +8,16 @@ Get dependencies:
 path\graft> mix deps.get
 Resolving Hex dependencies...
 ```
-Start the application
+Start the interactive Elixir Shell (iex) and load the project's Mix environment:
 ```cmd
 path\graft> iex -S mix
 ```
+Start the application:
 ```shell
 iex(1)> Graft.start
 [:ok, :ok, :ok, :ok, :ok]
 ```
-Add new members
+Add new members:
 ```shell
 iex(2)> Graft.add_member(:server1,[:server9, :server8])
 "Member change processing..."
