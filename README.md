@@ -12,7 +12,7 @@ Start the interactive Elixir Shell (iex) and load the project's Mix environment:
 ```cmd
 path\graft> iex -S mix
 ```
-Start the application:
+Initiate the consensus cluster:
 ```shell
 iex(1)> Graft.start
 [:ok, :ok, :ok, :ok, :ok]
