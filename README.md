@@ -3,7 +3,11 @@
 A add_member function is added to the original Graft library.
 
 ### A example:
-
+Get dependencies:
+```cmd
+path\graft> mix deps.get
+Resolving Hex dependencies...
+```
 Start the application
 ```cmd
 path\graft> iex -S mix
